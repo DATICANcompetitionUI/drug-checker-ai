@@ -1,2 +1,5 @@
-# drug-checker-ai
-Drug Checker AI is an intelligent healthcare platform that detects potential drug-drug interactions, provides risk analysis, and uses AI to explain medication safety in simple, patient-friendly language.
+# Drug Checker AI
+
+Smart Medication Safety Powered by AI
+
+Drug Checker AI is an intelligent healthcare platform that helps users identify potential drug-drug interactions, understand medication risks, and make safer healthcare decisions through AI-powered explanations and trusted pharmaceutical data.
