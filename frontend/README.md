@@ -136,8 +136,18 @@ cp .env.example .env
 ```
 
 ```env
-NEXT_PUBLIC_API_URL=http://localhost:5000/api/v1
+NEXT_PUBLIC_API_BASE_URL=http://localhost:5000/api/v1
 ```
+
+`NEXT_PUBLIC_API_URL` is still accepted as a legacy alias, but new deployments should use `NEXT_PUBLIC_API_BASE_URL`.
+
+For production, the Render backend URL is:
+
+```env
+NEXT_PUBLIC_API_BASE_URL=https://drugchecker-ai-backend.onrender.com/api/v1
+```
+
+The app keeps browser API calls same-origin and uses Next.js rewrites to proxy `/users`, `/drugs`, `/interactions`, `/history`, `/reports`, and `/admin` to the configured backend. This keeps authenticated cookie requests simpler on Vercel.
 
 ## Demo Workflow
 
@@ -225,9 +235,38 @@ If barcode lookup fails, use Camera scan or type the generic active ingredient.
 Run:
 
 ```bash
+npm install
 npm run lint
 npm run build
 ```
+
+## Production Deployment With Vercel CLI
+
+The frontend can be deployed from the monorepo without GitHub import by using the Vercel CLI from the `frontend/` directory:
+
+```bash
+cd frontend
+npm install
+npm run build
+npm install -g vercel
+vercel login
+vercel
+vercel --prod
+```
+
+When Vercel builds the app, `next.config.ts` uses `NEXT_PUBLIC_API_BASE_URL` if it is configured. If it is not configured, Vercel builds default to:
+
+```text
+https://drugchecker-ai-backend.onrender.com/api/v1
+```
+
+Recommended Vercel environment variable:
+
+```env
+NEXT_PUBLIC_API_BASE_URL=https://drugchecker-ai-backend.onrender.com/api/v1
+```
+
+No frontend database credentials or AI API keys are required.
 
 ## Submission Notes
 

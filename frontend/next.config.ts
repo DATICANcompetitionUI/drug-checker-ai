@@ -1,8 +1,14 @@
 import type { NextConfig } from "next";
 
-const rawApiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api/v1";
-// Ensure the URL always carries a protocol so Next.js rewrites don't reject it
-const apiBase = rawApiUrl.startsWith("http") ? rawApiUrl : `http://${rawApiUrl}`;
+const productionApiUrl = "https://drugchecker-ai-backend.onrender.com/api/v1";
+const localApiUrl = "http://localhost:5000/api/v1";
+const rawApiUrl =
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  (process.env.VERCEL ? productionApiUrl : localApiUrl);
+
+// Keep frontend calls same-origin and let Next/Vercel proxy them to the backend.
+const apiBase = (rawApiUrl.startsWith("http") ? rawApiUrl : `https://${rawApiUrl}`).replace(/\/$/, "");
 
 const nextConfig: NextConfig = {
   images: {

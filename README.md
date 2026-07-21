@@ -356,8 +356,10 @@ npm install
 Create frontend `.env` if needed:
 
 ```env
-NEXT_PUBLIC_API_URL=http://localhost:5000/api/v1
+NEXT_PUBLIC_API_BASE_URL=http://localhost:5000/api/v1
 ```
+
+`NEXT_PUBLIC_API_URL` is still supported as a legacy alias, but new deployments should use `NEXT_PUBLIC_API_BASE_URL`.
 
 Run:
 
@@ -406,6 +408,36 @@ and are forwarded to:
 ```text
 http://localhost:5000/api/v1
 ```
+
+For production Vercel deployments, use the Render backend:
+
+```env
+NEXT_PUBLIC_API_BASE_URL=https://drugchecker-ai-backend.onrender.com/api/v1
+```
+
+If the variable is not set during a Vercel build, `frontend/next.config.ts` falls back to the Render backend URL automatically.
+
+## Frontend Deployment With Vercel CLI
+
+Because the repository is in a GitHub organization that may not be visible from the Vercel account, deploy the frontend from the CLI using `frontend/` as the Vercel project root:
+
+```bash
+cd frontend
+npm install
+npm run build
+npm install -g vercel
+vercel login
+vercel
+vercel --prod
+```
+
+Recommended Vercel environment variable:
+
+```env
+NEXT_PUBLIC_API_BASE_URL=https://drugchecker-ai-backend.onrender.com/api/v1
+```
+
+No frontend database credentials or AI API keys are required.
 
 ## Authentication
 
