@@ -2,7 +2,7 @@
 
 Drug Checker AI is a modern healthcare web app for checking medication safety. The frontend provides a calm, light-mode dashboard where users can search medications, add 2 to 5 drugs, check verified interaction records, review AI explanations, save history, and generate clinical reports.
 
-This project was built for a hackathon demo. It is designed to be honest about scanning limits: camera OCR and barcode lookup are best-effort helpers, while typing the generic active ingredient is the most reliable way to add a drug.
+This project was built for a hackathon demo. It is designed to be honest about scanning limits: camera OCR is a best-effort helper, barcode scan is marked as coming soon, and typing the generic active ingredient is the most reliable way to add a drug.
 
 ## Key Features
 
@@ -13,8 +13,8 @@ This project was built for a hackathon demo. It is designed to be honest about s
 - Drug interaction checking for 2 to 5 selected medications
 - AI safety summary based on verified backend interaction data
 - Camera label scan with free browser OCR fallback through `tesseract.js`
-- Barcode scanner using the browser `BarcodeDetector` API where supported
-- Manual fallback search when camera or barcode scanning is not accurate
+- Barcode scanner UI marked as coming soon
+- Manual fallback search when camera scanning is not accurate
 - Interaction history timeline
 - Backend-generated PDF clinical reports from saved history
 - Optional XML report export
@@ -29,7 +29,7 @@ Drug Checker AI is a safety assistant, not a doctor or pharmacist.
 For the hackathon version:
 
 - Camera scan can misread medicine packs, especially with glare, handwriting, stylized fonts, blurry images, or Nigerian/local brand names.
-- Barcode lookup may fail because many local medication barcodes are not available in public drug databases.
+- Barcode lookup is not currently exposed in the UI; it is marked as coming soon.
 - The safest app flow is to type the generic active ingredient printed on the pack, for example `ibuprofen`, `paracetamol`, `artemisinin`, `piperaquine`, `amoxicillin`, or `metformin`.
 - AI is used only to explain interaction findings returned by the backend. It should not be treated as a source of new medical interaction data.
 - When the backend returns `NO_KNOWN_INTERACTION`, the UI shows `No known interaction found`, the checked medications, the checked time, and the safety note. It does not claim a combination is completely safe.
@@ -66,7 +66,6 @@ Important components:
 ```text
 src/app/components/dashboard/DrugChecker.tsx
 src/app/components/dashboard/DrugScanner.tsx
-src/app/components/dashboard/BarcodeScanner.tsx
 src/app/components/dashboard/Sidebar.tsx
 src/app/components/dashboard/DashboardHeader.tsx
 src/lib/api.ts
@@ -207,17 +206,11 @@ Known scanner limitation examples:
 - `Artequick` should resolve to `Artemisinin + Piperaquine`, but OCR can misread stylized lettering
 - local brands may need dictionary aliases before they resolve perfectly
 
-## Barcode Scan Workflow
+## Barcode Scan Status
 
-Barcode scan uses the browser `BarcodeDetector` API where supported.
+Barcode scan is currently marked as coming soon in the dashboard UI.
 
-Limitations:
-
-- not all browsers support barcode detection
-- many Nigerian medicine barcodes are not indexed in public medicine databases
-- a barcode may identify a product code but not a medication
-
-If barcode lookup fails, use Camera scan or type the generic active ingredient.
+For now, use Camera scan or type the generic active ingredient.
 
 ## Scripts
 
@@ -270,4 +263,4 @@ No frontend database credentials or AI API keys are required.
 
 ## Submission Notes
 
-Drug Checker AI focuses on verified interaction data and practical medication search. The camera and barcode features are included to make the demo engaging, but the UI intentionally tells users when scanning is best-effort and encourages typing the generic drug name for accuracy.
+Drug Checker AI focuses on verified interaction data and practical medication search. Camera scan is included as a best-effort helper, barcode is marked as coming soon, and the UI encourages typing the generic drug name for accuracy.

@@ -134,7 +134,7 @@ export default function Sidebar({ isOpen = false, onClose, isCollapsed = false, 
                 Scan-ready workspace
               </div>
               <p className="mt-2 text-xs font-medium leading-5 text-text-secondary">
-                Camera, barcode, and OCR flows are prepared for medication labels.
+                Camera and OCR flows are prepared for medication labels. Barcode scan is coming soon.
               </p>
             </div>
           )}

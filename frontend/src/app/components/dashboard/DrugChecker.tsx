@@ -44,7 +44,6 @@ import Card from "@/app/components/ui/Card";
 import Badge from "@/app/components/ui/Badge";
 import DashboardHeader from "@/app/components/dashboard/DashboardHeader";
 import DrugScanner from "@/app/components/dashboard/DrugScanner";
-import BarcodeScanner from "@/app/components/dashboard/BarcodeScanner";
 import MedicalIllustration from "@/app/components/illustrations/MedicalIllustrations";
 import { api } from "@/lib/api";
 import { Drug, InteractionCheckResult, KnowledgeBaseStats, Severity } from "@/lib/types";
@@ -175,7 +174,6 @@ export default function DrugChecker() {
   const [result, setResult] = useState<InteractionCheckResult | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
-  const [barcodeScannerOpen, setBarcodeScannerOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportTitle, setReportTitle] = useState("");
   const [reportNotes, setReportNotes] = useState("");
@@ -391,7 +389,7 @@ export default function DrugChecker() {
                 <p className="text-sm font-black uppercase tracking-[0.18em] text-primary-blue">Search medication</p>
                 <h2 className="mt-1.5 text-2xl font-black text-text-primary">Find a medication</h2>
                 <p className="mt-1 text-sm font-medium text-text-secondary">
-                  Add drugs by typing the generic name for best accuracy. Brand names, camera scan, and barcode are best-effort helpers.
+                  Add drugs by typing the generic name for best accuracy. Brand names and camera scan are best-effort helpers.
                 </p>
               </div>
 
@@ -405,14 +403,19 @@ export default function DrugChecker() {
                   <Camera className="h-3.5 w-3.5" />
                   Camera
                 </button>
-                <button
-                  onClick={() => setBarcodeScannerOpen(true)}
-                  title="Best-effort barcode lookup. If it misses, type the generic drug name."
-                  className="flex items-center gap-1.5 rounded-2xl border border-primary-blue/30 bg-primary-blue/5 px-3 py-2 text-xs font-bold text-primary-blue transition hover:bg-primary-blue/10"
-                >
-                  <Barcode className="h-3.5 w-3.5" />
-                  Barcode
-                </button>
+                <div className="relative">
+                  <button
+                    disabled
+                    title="Barcode scan coming soon"
+                    className="flex cursor-not-allowed items-center gap-1.5 rounded-2xl border border-border-app bg-surface-app px-3 py-2 text-xs font-bold text-text-muted opacity-60"
+                  >
+                    <Barcode className="h-3.5 w-3.5" />
+                    Barcode
+                  </button>
+                  <span className="absolute -right-1 -top-1.5 rounded-full bg-primary-blue px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide text-white">
+                    Soon
+                  </span>
+                </div>
                 <div className="relative">
                   <button
                     disabled
@@ -1127,15 +1130,6 @@ export default function DrugChecker() {
         isOpen={scannerOpen}
         onClose={() => setScannerOpen(false)}
         onDrugDetected={(drug) => selectDrug(drug)}
-      />
-      <BarcodeScanner
-        isOpen={barcodeScannerOpen}
-        onClose={() => setBarcodeScannerOpen(false)}
-        onDrugDetected={(drug) => selectDrug(drug)}
-        onUseCamera={() => {
-          setBarcodeScannerOpen(false);
-          setScannerOpen(true);
-        }}
       />
     </div>
   );

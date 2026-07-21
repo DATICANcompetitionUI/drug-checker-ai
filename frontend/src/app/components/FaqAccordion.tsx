@@ -7,7 +7,7 @@ const faqs = [
   ["Does AI decide if drugs interact?", "No. AI only explains verified database results. It never generates or infers interaction data on its own — every finding comes from the verified database first."],
   ["Can I check more than two drugs?", "Yes. The platform checks every possible pair across 2 to 5 selected medications simultaneously, giving you a complete picture of the combined risk."],
   ["Are reports stored securely?", "Yes. Reports are tied to your account, saved in the database, and can be viewed, updated, or permanently deleted at any time from your dashboard."],
-  ["Is drug scanning always accurate?", "No. Camera OCR and barcode lookup are best-effort helpers, especially for local Nigerian medicine packs with stylized text or unindexed barcodes. For the most reliable result, type the generic active ingredient printed on the label."],
+  ["Is drug scanning always accurate?", "No. Camera OCR is a best-effort helper, especially for local Nigerian medicine packs with stylized text. Barcode scan is coming soon. For the most reliable result, type the generic active ingredient printed on the label."],
 ];
 
 export default function FaqAccordion() {
