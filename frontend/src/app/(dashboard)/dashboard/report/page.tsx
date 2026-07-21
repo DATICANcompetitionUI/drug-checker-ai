@@ -4,13 +4,18 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
+  ArrowLeft,
   Calendar,
+  CheckCircle2,
   Download,
+  Eye,
   FileText,
+  Info,
   Loader2,
+  Pill,
   Search,
+  ShieldCheck,
   Trash2,
-  X,
 } from "lucide-react";
 import DashboardHeader from "@/app/components/dashboard/DashboardHeader";
 import Button from "@/app/components/ui/Button";
@@ -21,7 +26,8 @@ import MedicalIllustration from "@/app/components/illustrations/MedicalIllustrat
 import { api } from "@/lib/api";
 import { ReportDetail, ReportListItem } from "@/lib/types";
 
-function formatDate(value: string) {
+function formatDate(value?: string | null) {
+  if (!value) return "Not available";
   return new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 }
 
@@ -39,69 +45,76 @@ function variant(severity?: string | null) {
   return "none";
 }
 
+function statusLabel(report: ReportListItem | ReportDetail) {
+  if (report.overallStatus === "NO_KNOWN_INTERACTION") return "NO KNOWN";
+  return highest(report.severitySummary) || "FOUND";
+}
+
 function ReportContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const reportId = Number(searchParams.get("id"));
+  const selectedId = Number.isFinite(reportId) && reportId > 0 ? reportId : null;
+
   const [reports, setReports] = useState<ReportListItem[]>([]);
+  const [detail, setDetail] = useState<ReportDetail | null>(null);
   const [query, setQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  // Modal state
-  const [selectedId, setSelectedId] = useState<number | null>(() => {
-    const id = Number(searchParams.get("id"));
-    return Number.isFinite(id) && id > 0 ? id : null;
-  });
-  const [detail, setDetail] = useState<ReportDetail | null>(null);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+  const [error, setError] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [isDeletingReport, setIsDeletingReport] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
 
-  const openModal = useCallback((id: number) => {
-    setSelectedId(id);
-    router.replace(`/dashboard/report?id=${id}`);
-  }, [router]);
-
-  const closeModal = useCallback(() => {
-    setSelectedId(null);
-    setDetail(null);
-    router.replace("/dashboard/report");
-  }, [router]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setIsLoading(true);
-      setError("");
-      api.reports
-        .list()
-        .then((res) => setReports(res.data))
-        .catch((err) => setError(err instanceof Error ? err.message : "Unable to load reports."))
-        .finally(() => setIsLoading(false));
-    }, 0);
-
-    return () => window.clearTimeout(timer);
+  const loadReports = useCallback(async () => {
+    setIsLoading(true);
+    setError("");
+    try {
+      const response = await api.reports.list();
+      setReports(response.data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to load reports.");
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      if (!selectedId) {
-        setDetail(null);
-        return;
-      }
-      setIsLoadingDetail(true);
-      api.reports
-        .detail(selectedId)
-        .then((res) => setDetail(res.data))
-        .catch(() => {
-          toast.error("Unable to load report.");
-          closeModal();
-        })
-        .finally(() => setIsLoadingDetail(false));
+      void loadReports();
     }, 0);
 
     return () => window.clearTimeout(timer);
-  }, [selectedId, closeModal]);
+  }, [loadReports]);
+
+  useEffect(() => {
+    if (!selectedId) {
+      return;
+    }
+
+    let active = true;
+    const timer = window.setTimeout(() => {
+      setIsLoadingDetail(true);
+      api.reports
+        .detail(selectedId)
+        .then((response) => {
+          if (active) setDetail(response.data);
+        })
+        .catch((err) => {
+          if (!active) return;
+          toast.error(err instanceof Error ? err.message : "Unable to load report.");
+          router.replace("/dashboard/report");
+        })
+        .finally(() => {
+          if (active) setIsLoadingDetail(false);
+        });
+    }, 0);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [router, selectedId]);
 
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -109,36 +122,16 @@ function ReportContent() {
     return reports.filter(
       (item) =>
         item.title.toLowerCase().includes(term) ||
+        item.reportReference.toLowerCase().includes(term) ||
         item.selectedDrugs.some((drug) => drug.name.toLowerCase().includes(term))
     );
   }, [query, reports]);
 
-  const isDetailPage = Boolean(selectedId);
-  const pageTitle = isDetailPage ? "Clinical report" : "Clinical reports";
-  const pageDescription = isDetailPage
-    ? "View, print, and delete a generated report."
-    : "Search, view, print, and delete reports generated from saved interaction history.";
-
-  async function deleteReport(reportId: number, fromModal = false) {
-    setIsDeletingReport(true);
-    setConfirmDeleteId(null);
-    try {
-      await api.reports.remove(reportId);
-      toast.success("Report deleted.");
-      if (fromModal) closeModal();
-      setReports((current) => current.filter((item) => item.id !== reportId));
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Unable to delete report.");
-    } finally {
-      setIsDeletingReport(false);
-    }
-  }
-
-  async function downloadReport(reportId: number, format: "pdf" | "xml") {
-    const key = `${reportId}-${format}`;
+  async function downloadReport(id: number, format: "pdf" | "xml") {
+    const key = `${id}-${format}`;
     setDownloading(key);
     try {
-      const { blob, fileName } = await api.reports.download(reportId, format);
+      const { blob, fileName } = await api.reports.download(id, format);
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -155,192 +148,314 @@ function ReportContent() {
     }
   }
 
+  async function deleteReport(id: number) {
+    setIsDeletingReport(true);
+    setConfirmDeleteId(null);
+    try {
+      await api.reports.remove(id);
+      toast.success("Report deleted.");
+      setReports((current) => current.filter((item) => item.id !== id));
+      if (selectedId === id) {
+        setDetail(null);
+        router.replace("/dashboard/report");
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Unable to delete report.");
+    } finally {
+      setIsDeletingReport(false);
+    }
+  }
+
+  const isDetailPage = Boolean(selectedId);
+
   return (
     <div>
       <DashboardHeader
-        title={pageTitle}
-        description={pageDescription}
+        title={isDetailPage ? "Clinical report" : "Clinical reports"}
+        description={
+          isDetailPage
+            ? "Review generated report metadata and download backend-generated PDF or XML exports."
+            : "Search, view, download, export, and delete reports generated from saved interaction checks."
+        }
       />
 
-      {!isDetailPage ? (
-        <Card padding="lg">
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search reports or medications"
-              className="w-full rounded-2xl border border-border-app bg-surface-app py-3 pl-10 pr-4 text-sm font-semibold"
-            />
-          </div>
-        </Card>
-      ) : null}
-
-      <div className="mt-6">
-        {isDetailPage ? (
-          <Card className="p-7 md:p-10">
-            <div className="flex flex-col gap-6">
-              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between print:hidden">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                  <Button variant="secondary" onClick={closeModal} className="px-3 py-2">
-                    Back
-                  </Button>
-                  <div>
-                    <p className="text-sm font-black uppercase tracking-[0.18em] text-primary-blue">Clinical report</p>
-                    <h1 className="mt-2 text-3xl font-black tracking-tight">{detail?.title || "Loading report…"}</h1>
-                    {detail && <p className="mt-2 text-sm font-medium text-text-muted">Generated {formatDate(detail.createdAt)}</p>}
-                  </div>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button variant="secondary" onClick={() => window.print()} className="px-3 py-2">
-                    <Printer className="h-4 w-4" />
-                  </Button>
-                  <Button variant="secondary" onClick={() => window.print()} className="px-3 py-2">
-                    <Download className="h-4 w-4" />
-                  </Button>
-                  {detail && (
-                    <Button variant="danger" onClick={() => setConfirmDeleteId(detail.id)} className="px-3 py-2">
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  )}
+      {isDetailPage ? (
+        <section className="mt-6">
+          {isLoadingDetail ? (
+            <Card padding="lg">
+              <div className="space-y-4">
+                <div className="h-5 w-40 animate-pulse rounded-full bg-border-app" />
+                <div className="h-10 w-3/4 animate-pulse rounded-full bg-border-app" />
+                <div className="grid gap-4 md:grid-cols-4">
+                  {[1, 2, 3, 4].map((item) => (
+                    <div key={item} className="h-24 animate-pulse rounded-3xl bg-surface-app" />
+                  ))}
                 </div>
               </div>
-
-              {isLoadingDetail ? (
-                <div className="py-20 text-center">
-                  <Loader2 className="mx-auto h-10 w-10 animate-spin text-primary-blue" />
-                  <p className="mt-3 text-sm font-semibold text-text-secondary">Loading report…</p>
-                </div>
-              ) : detail ? (
-                <div className="space-y-8">
-                  <div className="grid gap-4 md:grid-cols-4">
-                    {[
-                      ["Drugs", detail.selectedDrugs.length],
-                      ["Findings", detail.interactions.length],
-                      ["High", detail.severitySummary.HIGH],
-                      ["Moderate", detail.severitySummary.MODERATE],
-                    ].map(([label, value]) => (
-                      <div key={label} className="rounded-3xl border border-border-app bg-surface-app p-4 text-center">
-                        <p className="text-xs font-bold text-text-muted">{label}</p>
-                        <p className="mt-1 text-2xl font-black">{value}</p>
-                      </div>
-                    ))}
+            </Card>
+          ) : detail ? (
+            <div className="space-y-6">
+              <Card padding="lg" className="overflow-hidden border-primary-blue/15">
+                <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0">
+                    <Button variant="secondary" onClick={() => router.replace("/dashboard/report")} className="mb-5 px-3 py-2">
+                      <ArrowLeft className="h-4 w-4" />
+                      Back to reports
+                    </Button>
+                    <p className="text-sm font-black uppercase tracking-[0.18em] text-primary-blue">Clinical report</p>
+                    <h1 className="mt-2 max-w-4xl text-2xl font-black tracking-tight text-text-primary md:text-3xl">
+                      {detail.title}
+                    </h1>
+                    <p className="mt-2 text-xs font-black uppercase tracking-wide text-primary-blue">{detail.reportReference}</p>
+                    <p className="mt-2 flex items-center gap-1.5 text-sm font-semibold text-text-muted">
+                      <Calendar className="h-4 w-4" />
+                      Generated {formatDate(detail.generatedAt || detail.createdAt)}
+                    </p>
                   </div>
 
-                  {detail.notes && (
-                    <div className="rounded-[28px] border border-border-app bg-surface-app p-5">
-                      <p className="text-xs font-black uppercase tracking-wide text-text-muted">Clinical notes</p>
-                      <p className="mt-2 text-sm font-medium leading-6 text-text-secondary">{detail.notes}</p>
-                    </div>
-                  )}
+                  <div className="flex flex-col gap-3 sm:flex-row lg:flex-col xl:flex-row">
+                    <Button onClick={() => downloadReport(detail.id, "pdf")} disabled={downloading === `${detail.id}-pdf`} className="w-full sm:w-auto">
+                      {downloading === `${detail.id}-pdf` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                      Download PDF
+                    </Button>
+                    <Button variant="secondary" onClick={() => downloadReport(detail.id, "xml")} disabled={downloading === `${detail.id}-xml`} className="w-full sm:w-auto">
+                      {downloading === `${detail.id}-xml` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                      Export XML
+                    </Button>
+                    <Button variant="danger" onClick={() => setConfirmDeleteId(detail.id)} className="w-full sm:w-auto">
+                      <Trash2 className="h-4 w-4" />
+                      Delete
+                    </Button>
+                  </div>
+                </div>
+              </Card>
 
-                  <div className="rounded-[28px] border border-border-app bg-surface-app p-5">
-                    <p className="text-xs font-black uppercase tracking-wide text-text-muted">Medications assessed</p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {detail.selectedDrugs.map((drug) => (
-                        <span key={drug.rxcui} className="rounded-full border border-border-app bg-white px-3 py-1.5 text-xs font-bold text-text-secondary">
-                          {drug.name}
-                        </span>
+              <div className="grid gap-6 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+                <div className="space-y-6">
+                  <Card padding="lg">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-wide text-text-muted">Overall result</p>
+                        <h2 className="mt-2 text-2xl font-black text-text-primary">
+                          {detail.overallStatus === "NO_KNOWN_INTERACTION" ? "No known interaction found" : "Verified interaction found"}
+                        </h2>
+                      </div>
+                      <Badge variant={variant(highest(detail.severitySummary))}>{statusLabel(detail)}</Badge>
+                    </div>
+
+                    <div className="mt-6 grid grid-cols-2 gap-3">
+                      {[
+                        ["Drugs", detail.selectedDrugs.length],
+                        ["Findings", detail.interactions.length],
+                        ["High", detail.severitySummary.HIGH],
+                        ["Moderate", detail.severitySummary.MODERATE],
+                      ].map(([label, value]) => (
+                        <div key={label} className="rounded-3xl border border-border-app bg-surface-app p-4">
+                          <p className="text-xs font-bold text-text-muted">{label}</p>
+                          <p className="mt-1 text-2xl font-black text-text-primary">{value}</p>
+                        </div>
                       ))}
                     </div>
+                  </Card>
+
+                  <Card padding="lg">
+                    <p className="text-xs font-black uppercase tracking-wide text-text-muted">Medications assessed</p>
+                    <div className="mt-4 space-y-3">
+                      {detail.selectedDrugs.map((drug) => (
+                        <div key={drug.rxcui} className="flex items-center gap-3 rounded-3xl border border-border-app bg-surface-app p-4">
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary-blue/10 text-primary-blue">
+                            <Pill className="h-5 w-5" />
+                          </span>
+                          <div className="min-w-0">
+                            <p className="font-black text-text-primary">{drug.name}</p>
+                            <p className="text-xs font-semibold text-text-muted">RXCUI: {drug.rxcui || "Not available"}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+
+                  {detail.notes && (
+                    <Card padding="lg">
+                      <p className="text-xs font-black uppercase tracking-wide text-text-muted">Clinical notes</p>
+                      <p className="mt-2 text-sm font-medium leading-6 text-text-secondary">{detail.notes}</p>
+                    </Card>
+                  )}
+                </div>
+
+                <Card padding="lg">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary-blue/10 text-primary-blue">
+                      <ShieldCheck className="h-5 w-5" />
+                    </span>
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-wide text-text-muted">Interaction findings</p>
+                      <h2 className="text-xl font-black text-text-primary">Verified clinical records</h2>
+                    </div>
                   </div>
 
-                  <div className="space-y-4">
-                    <h2 className="text-xl font-black">Verified interactions</h2>
+                  <div className="mt-6 space-y-4">
                     {detail.interactions.length ? (
                       detail.interactions.map((interaction) => (
                         <article
                           key={`${interaction.drugA.rxcui}-${interaction.drugB.rxcui}`}
                           className="rounded-[28px] border border-border-app bg-surface-app p-5"
                         >
-                          <Badge variant={variant(interaction.severity)}>{interaction.severity}</Badge>
-                          <h3 className="mt-3 text-lg font-black">
-                            {interaction.drugA.name} + {interaction.drugB.name}
-                          </h3>
-                          <p className="mt-3 text-sm font-medium leading-6 text-text-secondary">{interaction.effect}</p>
-                          <p className="mt-3 text-sm font-bold leading-6 text-text-primary">{interaction.recommendation}</p>
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                              <h3 className="text-lg font-black text-text-primary">
+                                {interaction.drugA.name} + {interaction.drugB.name}
+                              </h3>
+                              <p className="mt-1 text-xs font-black uppercase tracking-wide text-primary-blue">{interaction.source}</p>
+                            </div>
+                            <Badge variant={variant(interaction.severity)}>{interaction.severity}</Badge>
+                          </div>
+                          <div className="mt-5 space-y-4">
+                            <div>
+                              <p className="text-xs font-black uppercase tracking-wide text-text-muted">Clinical effect</p>
+                              <p className="mt-1 text-sm font-medium leading-6 text-text-secondary">{interaction.effect}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs font-black uppercase tracking-wide text-text-muted">Recommendation</p>
+                              <p className="mt-1 text-sm font-bold leading-6 text-text-primary">{interaction.recommendation}</p>
+                            </div>
+                            {interaction.aiExplanation && (
+                              <div>
+                                <p className="text-xs font-black uppercase tracking-wide text-text-muted">Plain-language explanation</p>
+                                <p className="mt-1 text-sm font-medium leading-6 text-text-secondary">{interaction.aiExplanation}</p>
+                              </div>
+                            )}
+                          </div>
                         </article>
                       ))
                     ) : (
-                      <div className="rounded-[28px] border border-dashed border-border-app bg-surface-app p-8 text-center">
-                        <MedicalIllustration name="safe" className="mx-auto h-32 w-44" />
-                        <p className="mt-2 text-sm font-black">No verified interactions in this report.</p>
+                      <div className="rounded-[28px] border border-medical-green/25 bg-medical-green/5 p-8">
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-medical-green shadow-soft">
+                            <CheckCircle2 className="h-6 w-6" />
+                          </span>
+                          <div>
+                            <p className="text-xs font-black uppercase tracking-[0.18em] text-primary-blue">Knowledge base search complete</p>
+                            <h3 className="mt-1 text-xl font-black text-text-primary">No verified interaction records found</h3>
+                            <p className="mt-2 text-sm font-medium leading-6 text-text-secondary">
+                              No interaction matching the selected medications was found in the current Drug Checker AI Knowledge Base.
+                            </p>
+                            <p className="mt-3 text-sm font-semibold leading-6 text-text-secondary">{detail.safetyNote}</p>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>
+                </Card>
+              </div>
+
+              <Card padding="lg" className="border-primary-blue/15 bg-primary-blue/5">
+                <div className="flex items-start gap-3">
+                  <Info className="mt-0.5 h-5 w-5 shrink-0 text-primary-blue" />
+                  <div>
+                    <p className="font-black text-text-primary">Medical disclaimer</p>
+                    <p className="mt-2 text-sm font-semibold leading-6 text-text-secondary">{detail.disclaimer}</p>
+                    <p className="mt-2 text-sm font-semibold leading-6 text-text-secondary">{detail.safetyNote}</p>
+                  </div>
                 </div>
-              ) : null}
+              </Card>
+            </div>
+          ) : null}
+        </section>
+      ) : (
+        <>
+          <Card padding="lg">
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search reports, references, or medications"
+                className="w-full rounded-2xl border border-border-app bg-surface-app py-3 pl-10 pr-4 text-sm font-semibold outline-none transition focus:border-primary-blue focus:ring-2 focus:ring-primary-blue/10"
+              />
             </div>
           </Card>
-        ) : isLoading ? (
-          <div className="py-24 text-center">
-            <Loader2 className="mx-auto h-10 w-10 animate-spin text-primary-blue" />
-            <p className="mt-3 text-sm font-semibold text-text-secondary">Loading reports…</p>
+
+          <div className="mt-6">
+            {isLoading ? (
+              <div className="grid gap-5 lg:grid-cols-2">
+                {[1, 2, 3, 4].map((item) => (
+                  <Card key={item} padding="lg">
+                    <div className="h-4 w-28 animate-pulse rounded-full bg-border-app" />
+                    <div className="mt-4 h-7 w-3/4 animate-pulse rounded-full bg-border-app" />
+                    <div className="mt-6 h-20 animate-pulse rounded-3xl bg-surface-app" />
+                  </Card>
+                ))}
+              </div>
+            ) : error ? (
+              <Card className="p-10 text-center">
+                <MedicalIllustration name="no-results" className="mx-auto h-40 w-52" />
+                <p className="mt-4 font-black">{error}</p>
+              </Card>
+            ) : filtered.length === 0 ? (
+              <Card className="p-12 text-center">
+                <MedicalIllustration name="report" className="mx-auto h-44 w-56" />
+                <h3 className="mt-4 text-xl font-black">No reports yet</h3>
+                <p className="mx-auto mt-2 max-w-md text-sm font-medium text-text-secondary">
+                  Run an interaction check, save it to history, and generate a clinical report.
+                </p>
+              </Card>
+            ) : (
+              <div className="grid gap-5 lg:grid-cols-2">
+                {filtered.map((item) => {
+                  const severity = highest(item.severitySummary);
+                  return (
+                    <Card key={item.id} className="p-5 sm:p-6">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <Badge variant={variant(severity)}>{statusLabel(item)}</Badge>
+                          <h3 className="mt-3 text-lg font-black text-text-primary">{item.title}</h3>
+                          <p className="mt-1 text-xs font-black uppercase tracking-wide text-primary-blue">{item.reportReference}</p>
+                          <p className="mt-2 flex items-center gap-1 text-xs font-bold text-text-muted">
+                            <Calendar className="h-4 w-4" /> {formatDate(item.generatedAt || item.createdAt)}
+                          </p>
+                        </div>
+                        <FileText className="h-7 w-7 shrink-0 text-primary-blue" />
+                      </div>
+
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {item.selectedDrugs.map((drug) => (
+                          <span key={drug.rxcui} className="rounded-full bg-surface-app px-3 py-1 text-xs font-bold text-text-secondary">
+                            {drug.name}
+                          </span>
+                        ))}
+                      </div>
+
+                      <div className="mt-5 flex flex-col gap-4 border-t border-border-app pt-4 xl:flex-row xl:items-center xl:justify-between">
+                        <span className="text-xs font-bold text-text-muted">
+                          {item.interactionCount} finding{item.interactionCount === 1 ? "" : "s"} - {severity || "No severity"}
+                        </span>
+                        <div className="flex flex-wrap gap-2">
+                          <Button variant="secondary" onClick={() => downloadReport(item.id, "pdf")} disabled={downloading === `${item.id}-pdf`} className="px-3 py-2">
+                            {downloading === `${item.id}-pdf` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                            PDF
+                          </Button>
+                          <Button variant="secondary" onClick={() => downloadReport(item.id, "xml")} disabled={downloading === `${item.id}-xml`} className="px-3 py-2">
+                            {downloading === `${item.id}-xml` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                            XML
+                          </Button>
+                          <Button variant="secondary" onClick={() => router.replace(`/dashboard/report?id=${item.id}`)} className="px-3 py-2">
+                            <Eye className="h-4 w-4" />
+                            View
+                          </Button>
+                          <Button variant="secondary" onClick={() => setConfirmDeleteId(item.id)} className="px-3 py-2">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
           </div>
-        ) : error ? (
-          <Card className="p-10 text-center">
-            <MedicalIllustration name="no-results" className="mx-auto h-40 w-52" />
-            <p className="mt-4 font-black">{error}</p>
-          </Card>
-        ) : filtered.length === 0 ? (
-          <Card className="p-12 text-center">
-            <MedicalIllustration name="report" className="mx-auto h-44 w-56" />
-            <h3 className="mt-4 text-xl font-black">No reports yet</h3>
-            <p className="mx-auto mt-2 max-w-md text-sm font-medium text-text-secondary">
-              Run an interaction check, save it to history, and generate a clinical report.
-            </p>
-          </Card>
-        ) : (
-          <div className="grid gap-5 lg:grid-cols-2">
-            {filtered.map((item) => {
-              const severity = highest(item.severitySummary);
-              return (
-                <Card key={item.id} className="p-6">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <Badge variant={variant(severity)}>{item.overallStatus === "NO_KNOWN_INTERACTION" ? "NO KNOWN" : severity || "FOUND"}</Badge>
-                      <h3 className="mt-3 text-lg font-black">{item.title}</h3>
-                      <p className="mt-1 text-xs font-black uppercase tracking-wide text-primary-blue">{item.reportReference}</p>
-                      <p className="mt-2 flex items-center gap-1 text-xs font-bold text-text-muted">
-                        <Calendar className="h-4 w-4" /> {formatDate(item.generatedAt || item.createdAt)}
-                      </p>
-                    </div>
-                    <FileText className="h-7 w-7 text-primary-blue shrink-0" />
-                  </div>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {item.selectedDrugs.map((drug) => (
-                      <span key={drug.rxcui} className="rounded-full bg-surface-app px-3 py-1 text-xs font-bold text-text-secondary">
-                        {drug.name}
-                      </span>
-                    ))}
-                  </div>
-                  <div className="mt-5 flex items-center justify-between border-t border-border-app pt-4">
-                    <span className="text-xs font-bold text-text-muted">
-                      {item.interactionCount} finding{item.interactionCount === 1 ? "" : "s"} - {severity || "No severity"}
-                    </span>
-                    <div className="flex gap-2">
-                      <Button variant="secondary" onClick={() => downloadReport(item.id, "pdf")} disabled={downloading === `${item.id}-pdf`} className="px-3 py-2">
-                        {downloading === `${item.id}-pdf` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                        <span className="hidden xl:inline">PDF</span>
-                      </Button>
-                      <Button variant="secondary" onClick={() => downloadReport(item.id, "xml")} disabled={downloading === `${item.id}-xml`} className="px-3 py-2">
-                        {downloading === `${item.id}-xml` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                        <span className="hidden xl:inline">XML</span>
-                      </Button>
-                      <Button variant="secondary" onClick={() => setConfirmDeleteId(item.id)} className="px-3 py-2">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                      <Button onClick={() => openModal(item.id)} className="px-4 py-2">
-                        View details
-                      </Button>
-                    </div>
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
-        )}
-      </div>
+        </>
+      )}
 
       <ConfirmModal
         isOpen={confirmDeleteId !== null}
@@ -348,124 +463,9 @@ function ReportContent() {
         description="This clinical report will be permanently deleted and cannot be recovered."
         confirmLabel="Yes, delete"
         isLoading={isDeletingReport}
-        onConfirm={() => confirmDeleteId !== null && deleteReport(confirmDeleteId, selectedId === confirmDeleteId)}
+        onConfirm={() => confirmDeleteId !== null && deleteReport(confirmDeleteId)}
         onCancel={() => setConfirmDeleteId(null)}
       />
-
-      {/* Report detail modal */}
-      {selectedId && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-slate-900/40 backdrop-blur-sm sm:items-start sm:p-4">
-          <div className="w-full max-w-2xl rounded-t-[34px] border border-border-app bg-white shadow-premium sm:my-8 sm:rounded-[34px]">
-            <div className="flex items-center justify-between border-b border-border-app px-7 py-5">
-              <h3 className="text-xl font-black">Clinical report</h3>
-              <div className="flex items-center gap-2">
-                {detail && (
-                  <>
-                    <Button variant="secondary" onClick={() => downloadReport(detail.id, "pdf")} disabled={downloading === `${detail.id}-pdf`} className="px-3 py-2">
-                      {downloading === `${detail.id}-pdf` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                      <span className="hidden sm:inline">PDF</span>
-                    </Button>
-                    <Button variant="secondary" onClick={() => downloadReport(detail.id, "xml")} disabled={downloading === `${detail.id}-xml`} className="px-3 py-2">
-                      {downloading === `${detail.id}-xml` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                      <span className="hidden sm:inline">XML</span>
-                    </Button>
-                    <Button variant="danger" onClick={() => setConfirmDeleteId(detail.id)} className="px-3 py-2">
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </>
-                )}
-                <button
-                  onClick={closeModal}
-                  className="rounded-2xl border border-border-app p-2 text-text-muted hover:bg-surface-app"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-
-            {isLoadingDetail ? (
-              <div className="py-20 text-center">
-                <Loader2 className="mx-auto h-10 w-10 animate-spin text-primary-blue" />
-                <p className="mt-3 text-sm font-semibold text-text-secondary">Loading report…</p>
-              </div>
-            ) : detail ? (
-              <div className="p-7 md:p-10">
-                <div className="flex flex-col gap-4 border-b border-border-app pb-7 md:flex-row md:items-start md:justify-between">
-                  <div>
-                    <p className="text-sm font-black uppercase tracking-[0.18em] text-primary-blue">Clinical report</p>
-                    <h1 className="mt-2 text-3xl font-black tracking-tight">{detail.title}</h1>
-                    <p className="mt-2 text-xs font-black uppercase tracking-wide text-primary-blue">{detail.reportReference}</p>
-                    <p className="mt-2 text-sm font-medium text-text-muted">Generated {formatDate(detail.generatedAt || detail.createdAt)}</p>
-                  </div>
-                  <Badge variant={variant(highest(detail.severitySummary))}>
-                    {detail.overallStatus === "NO_KNOWN_INTERACTION" ? "NO KNOWN" : highest(detail.severitySummary) || "FOUND"}
-                  </Badge>
-                </div>
-
-                <div className="mt-7 grid gap-4 md:grid-cols-4">
-                  {[
-                    ["Drugs", detail.selectedDrugs.length],
-                    ["Findings", detail.interactions.length],
-                    ["High", detail.severitySummary.HIGH],
-                    ["Moderate", detail.severitySummary.MODERATE],
-                  ].map(([label, value]) => (
-                    <div key={label} className="rounded-3xl border border-border-app bg-surface-app p-4 text-center">
-                      <p className="text-xs font-bold text-text-muted">{label}</p>
-                      <p className="mt-1 text-2xl font-black">{value}</p>
-                    </div>
-                  ))}
-                </div>
-
-                {detail.notes && (
-                  <div className="mt-7 rounded-[28px] border border-border-app bg-surface-app p-5">
-                    <p className="text-xs font-black uppercase tracking-wide text-text-muted">Clinical notes</p>
-                    <p className="mt-2 text-sm font-medium leading-6 text-text-secondary">{detail.notes}</p>
-                  </div>
-                )}
-
-                <div className="mt-7">
-                  <p className="text-xs font-black uppercase tracking-wide text-text-muted">Medications assessed</p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {detail.selectedDrugs.map((drug) => (
-                      <span key={drug.rxcui} className="rounded-full border border-border-app bg-white px-3 py-1.5 text-xs font-bold text-text-secondary">
-                        {drug.name}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="mt-8 space-y-4">
-                  <h2 className="text-xl font-black">Verified interactions</h2>
-                  {detail.interactions.length ? (
-                    detail.interactions.map((interaction) => (
-                      <article
-                        key={`${interaction.drugA.rxcui}-${interaction.drugB.rxcui}`}
-                        className="rounded-[28px] border border-border-app bg-surface-app p-5"
-                      >
-                        <Badge variant={variant(interaction.severity)}>{interaction.severity}</Badge>
-                        <h3 className="mt-3 text-lg font-black">
-                          {interaction.drugA.name} + {interaction.drugB.name}
-                        </h3>
-                        <p className="mt-3 text-sm font-medium leading-6 text-text-secondary">{interaction.effect}</p>
-                        <p className="mt-3 text-sm font-bold leading-6 text-text-primary">{interaction.recommendation}</p>
-                      </article>
-                    ))
-                  ) : (
-                    <div className="rounded-[28px] border border-dashed border-border-app bg-surface-app p-8 text-center">
-                      <MedicalIllustration name="safe" className="mx-auto h-32 w-44" />
-                      <p className="mt-2 text-sm font-black">No known interaction found</p>
-                      <p className="mx-auto mt-2 max-w-md text-sm font-medium leading-6 text-text-secondary">
-                        No known interaction was found between the selected medications in our current verified dataset.
-                      </p>
-                      <p className="mx-auto mt-3 max-w-md text-xs font-semibold leading-5 text-text-muted">{detail.safetyNote}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ) : null}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
