@@ -2,6 +2,8 @@
 
 Drug Checker AI is a modern healthcare web app for checking medication safety. The frontend provides a calm, light-mode dashboard where users can search medications, add 2 to 5 drugs, check verified interaction records, review AI explanations, save history, and generate clinical reports.
 
+Website: https://bit.ly/drugcheckerai
+
 This project was built for a hackathon demo. It is designed to be honest about scanning limits: camera OCR is a best-effort helper, barcode scan is marked as coming soon, and typing the generic active ingredient is the most reliable way to add a drug.
 
 ## Key Features

@@ -2,6 +2,8 @@
 
 Drug Checker AI is an AI-assisted medication safety platform built for helping users search medicines, check possible drug-drug interactions, understand risk levels, and save clinical-style reports.
 
+Website: https://bit.ly/drugcheckerai
+
 The project focuses on a practical healthcare problem: many people take multiple medicines at the same time, but they may not understand whether those combinations are risky. Drug Checker AI gives users a clean workflow to search for medications, select up to five drugs, check verified interaction records, and read plain-language AI explanations based only on confirmed data.
 
 > Important: Drug Checker AI is a safety assistant for education and hackathon demonstration. It does not replace a doctor, pharmacist, or qualified healthcare professional.
@@ -34,8 +36,8 @@ If no known interaction exists in the verified dataset, the app does not claim t
 - RxNav integration for standardized drug concepts
 - Camera label scan with OCR-assisted matching
 - Free browser OCR fallback using Tesseract.js on the frontend
-- Barcode scan with best-effort lookup
-- Manual drug-name fallback when scan/barcode misses
+- Barcode scan marked as coming soon
+- Manual drug-name fallback when camera scan misses
 - Interaction checking for 2 to 5 medications
 - Automatic generation of every possible drug pair
 - Duplicate therapy warnings
