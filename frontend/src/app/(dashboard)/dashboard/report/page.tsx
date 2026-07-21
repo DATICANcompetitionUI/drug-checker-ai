@@ -113,6 +113,12 @@ function ReportContent() {
     );
   }, [query, reports]);
 
+  const isDetailPage = Boolean(selectedId);
+  const pageTitle = isDetailPage ? "Clinical report" : "Clinical reports";
+  const pageDescription = isDetailPage
+    ? "View, print, and delete a generated report."
+    : "Search, view, print, and delete reports generated from saved interaction history.";
+
   async function deleteReport(reportId: number, fromModal = false) {
     setIsDeletingReport(true);
     setConfirmDeleteId(null);
@@ -152,24 +158,121 @@ function ReportContent() {
   return (
     <div>
       <DashboardHeader
-        title="Clinical reports"
-        description="Search, view, download, export, and delete backend-generated clinical reports."
+        title={pageTitle}
+        description={pageDescription}
       />
 
-      <Card padding="lg">
-        <div className="relative">
-          <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search reports or medications"
-            className="w-full rounded-2xl border border-border-app bg-surface-app py-3 pl-10 pr-4 text-sm font-semibold"
-          />
-        </div>
-      </Card>
+      {!isDetailPage ? (
+        <Card padding="lg">
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search reports or medications"
+              className="w-full rounded-2xl border border-border-app bg-surface-app py-3 pl-10 pr-4 text-sm font-semibold"
+            />
+          </div>
+        </Card>
+      ) : null}
 
       <div className="mt-6">
-        {isLoading ? (
+        {isDetailPage ? (
+          <Card className="p-7 md:p-10">
+            <div className="flex flex-col gap-6">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between print:hidden">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <Button variant="secondary" onClick={closeModal} className="px-3 py-2">
+                    Back
+                  </Button>
+                  <div>
+                    <p className="text-sm font-black uppercase tracking-[0.18em] text-primary-blue">Clinical report</p>
+                    <h1 className="mt-2 text-3xl font-black tracking-tight">{detail?.title || "Loading report…"}</h1>
+                    {detail && <p className="mt-2 text-sm font-medium text-text-muted">Generated {formatDate(detail.createdAt)}</p>}
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button variant="secondary" onClick={() => window.print()} className="px-3 py-2">
+                    <Printer className="h-4 w-4" />
+                  </Button>
+                  <Button variant="secondary" onClick={() => window.print()} className="px-3 py-2">
+                    <Download className="h-4 w-4" />
+                  </Button>
+                  {detail && (
+                    <Button variant="danger" onClick={() => setConfirmDeleteId(detail.id)} className="px-3 py-2">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {isLoadingDetail ? (
+                <div className="py-20 text-center">
+                  <Loader2 className="mx-auto h-10 w-10 animate-spin text-primary-blue" />
+                  <p className="mt-3 text-sm font-semibold text-text-secondary">Loading report…</p>
+                </div>
+              ) : detail ? (
+                <div className="space-y-8">
+                  <div className="grid gap-4 md:grid-cols-4">
+                    {[
+                      ["Drugs", detail.selectedDrugs.length],
+                      ["Findings", detail.interactions.length],
+                      ["High", detail.severitySummary.HIGH],
+                      ["Moderate", detail.severitySummary.MODERATE],
+                    ].map(([label, value]) => (
+                      <div key={label} className="rounded-3xl border border-border-app bg-surface-app p-4 text-center">
+                        <p className="text-xs font-bold text-text-muted">{label}</p>
+                        <p className="mt-1 text-2xl font-black">{value}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {detail.notes && (
+                    <div className="rounded-[28px] border border-border-app bg-surface-app p-5">
+                      <p className="text-xs font-black uppercase tracking-wide text-text-muted">Clinical notes</p>
+                      <p className="mt-2 text-sm font-medium leading-6 text-text-secondary">{detail.notes}</p>
+                    </div>
+                  )}
+
+                  <div className="rounded-[28px] border border-border-app bg-surface-app p-5">
+                    <p className="text-xs font-black uppercase tracking-wide text-text-muted">Medications assessed</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {detail.selectedDrugs.map((drug) => (
+                        <span key={drug.rxcui} className="rounded-full border border-border-app bg-white px-3 py-1.5 text-xs font-bold text-text-secondary">
+                          {drug.name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <h2 className="text-xl font-black">Verified interactions</h2>
+                    {detail.interactions.length ? (
+                      detail.interactions.map((interaction) => (
+                        <article
+                          key={`${interaction.drugA.rxcui}-${interaction.drugB.rxcui}`}
+                          className="rounded-[28px] border border-border-app bg-surface-app p-5"
+                        >
+                          <Badge variant={variant(interaction.severity)}>{interaction.severity}</Badge>
+                          <h3 className="mt-3 text-lg font-black">
+                            {interaction.drugA.name} + {interaction.drugB.name}
+                          </h3>
+                          <p className="mt-3 text-sm font-medium leading-6 text-text-secondary">{interaction.effect}</p>
+                          <p className="mt-3 text-sm font-bold leading-6 text-text-primary">{interaction.recommendation}</p>
+                        </article>
+                      ))
+                    ) : (
+                      <div className="rounded-[28px] border border-dashed border-border-app bg-surface-app p-8 text-center">
+                        <MedicalIllustration name="safe" className="mx-auto h-32 w-44" />
+                        <p className="mt-2 text-sm font-black">No verified interactions in this report.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </Card>
+        ) : isLoading ? (
           <div className="py-24 text-center">
             <Loader2 className="mx-auto h-10 w-10 animate-spin text-primary-blue" />
             <p className="mt-3 text-sm font-semibold text-text-secondary">Loading reports…</p>
