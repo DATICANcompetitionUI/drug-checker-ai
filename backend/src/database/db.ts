@@ -25,8 +25,9 @@ export const connectToDB = async () => {
     console.log("Connected to the database Successfully.")
 
     await sequelize.sync()
-    const { ensureReportColumns } = await import('./schemaPatches.js')
+    const { ensureKnowledgeBaseColumns, ensureReportColumns } = await import('./schemaPatches.js')
     await ensureReportColumns()
+    await ensureKnowledgeBaseColumns()
 
     if (process.env.AUTO_SEED_INTERACTIONS !== 'false') {
       const { seedDrugInteractions } = await import('./seeders/seedDrugInteractions.js')
@@ -36,6 +37,8 @@ export const connectToDB = async () => {
     if (process.env.AUTO_SEED_MEDICATIONS !== 'false') {
       const { seedMedications } = await import('./seeders/seedMedications.js')
       await seedMedications()
+      const { seedMedicationAliases } = await import('./seeders/seedMedicationAliases.js')
+      await seedMedicationAliases()
     }
     
   } catch (error : any) {

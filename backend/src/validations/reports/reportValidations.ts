@@ -11,6 +11,14 @@ export const reportGenerationValidation = {
     toInt: true,
     errorMessage: 'Invalid history id',
   },
+  interactionCheckId: {
+    in: 'body',
+    optional: true,
+    custom: {
+      options: (value: unknown) => value === undefined || value === null || value === "" || (Number.isInteger(Number(value)) && Number(value) > 0),
+      errorMessage: 'Interaction check id must be a valid number',
+    },
+  },
   title: {
     in: 'body',
     optional: true,
@@ -39,6 +47,21 @@ export const reportGenerationValidation = {
     optional: true,
     isArray: true,
     errorMessage: 'Interaction results must be an array',
+  },
+  checkedPairs: {
+    in: 'body',
+    optional: true,
+    isArray: true,
+    errorMessage: 'Checked pairs must be an array',
+  },
+  preferredFormat: {
+    in: 'body',
+    optional: true,
+    isIn: {
+      options: [['pdf', 'xml']],
+      errorMessage: 'Preferred format must be pdf or xml',
+    },
+    errorMessage: 'Invalid preferred format',
   },
 }
 

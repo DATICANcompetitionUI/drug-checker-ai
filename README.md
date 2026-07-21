@@ -23,7 +23,7 @@ AI explains verified interaction data.
 AI does not invent medical interaction data.
 ```
 
-If no verified interaction exists in the local database, the app does not claim the combination is safe. It shows that no verified local interaction was found and advises professional confirmation.
+If no known interaction exists in the verified dataset, the app does not claim the combination is safe. It shows `No known interaction found` with a visible safety note and advises professional confirmation.
 
 ## Main Features
 
@@ -43,6 +43,8 @@ If no verified interaction exists in the local database, the app does not claim 
 - AI explanation and AI safety summary
 - Interaction history
 - Clinical report generation from saved history
+- Knowledge-base statistics for medication, alias, interaction, and source coverage
+- CSV, JSON, and Excel import pipeline for verified interaction datasets
 - Report list, report detail, update, and delete
 - Admin interaction management
 - Responsive healthcare-focused frontend UI
@@ -75,6 +77,8 @@ For the most reliable result, the user should type the generic active ingredient
 - RxNav API
 - Google Gemini API
 - Optional Google Cloud Vision OCR
+- pdfkit
+- xlsx import support
 
 ### Frontend
 
@@ -89,11 +93,11 @@ For the most reliable result, the user should type the generic active ingredient
 
 ## Repository Layout
 
-This workspace has the backend and frontend as separate projects:
+This workspace is a synchronized monorepo with frontend and backend projects:
 
 ```text
-DATICAN 2026/
-  drug-checker-ai-backend/
+drug-checker-ai/
+  backend/
     README.md
     package.json
     src/
@@ -109,7 +113,7 @@ DATICAN 2026/
       utils/
       validations/
 
-  drug-checker-ai-frontend/
+  frontend/
     README.md
     package.json
     src/
@@ -117,8 +121,6 @@ DATICAN 2026/
       lib/
       public/
 ```
-
-This root README is kept in the backend folder, but it explains the full project.
 
 ## System Architecture
 
@@ -265,7 +267,7 @@ RHZE -> Rifampicin + Isoniazid + Pyrazinamide + Ethambutol
 Move into the backend folder:
 
 ```bash
-cd drug-checker-ai-backend
+cd backend
 ```
 
 Install dependencies:
@@ -310,6 +312,7 @@ RXNAV_BASE_URL=https://rxnav.nlm.nih.gov/REST
 AUTO_SEED_INTERACTIONS=true
 AUTO_SEED_MEDICATIONS=true
 ADMIN_EMAILS=admin@example.com
+REPORT_STORAGE_DIR=storage/reports
 ```
 
 Start MySQL, then run:
@@ -341,7 +344,7 @@ npm start
 Move into the frontend folder:
 
 ```bash
-cd ../drug-checker-ai-frontend
+cd ../frontend
 ```
 
 Install dependencies:
@@ -550,6 +553,15 @@ Rules:
 
 Response includes:
 
+- `hasInteraction`
+- `status`: `INTERACTION_FOUND` or `NO_KNOWN_INTERACTION`
+- `title`
+- `message`
+- `safetyNote`
+- `checkedDrugs`
+- `checkedPairs`
+- `sourceCoverage`
+- `checkedAt`
 - `selectedDrugs`
 - `duplicateTherapies`
 - `safetySummary`
@@ -557,6 +569,8 @@ Response includes:
 - `interactions`
 - `historySaved`
 - `historyId`
+
+When no known interaction is found, the backend returns `NO_KNOWN_INTERACTION` with the title `No known interaction found` and a safety note. The app must not claim that medication combinations are completely safe.
 
 ## History APIs
 
@@ -571,6 +585,23 @@ DELETE /api/v1/history/:id
 
 Users can only access their own history.
 
+## Knowledge Base APIs
+
+```http
+GET /api/v1/drugs/knowledge-base/stats
+```
+
+Returns:
+
+- `version`
+- `totalMedications`
+- `totalAliases`
+- `totalInteractionRecords`
+- `lastUpdated`
+- `sourceDatasets`
+
+The frontend dashboard displays these statistics to make dataset coverage transparent.
+
 ## Report APIs
 
 All report routes are protected.
@@ -579,6 +610,8 @@ All report routes are protected.
 POST   /api/v1/reports/generate
 GET    /api/v1/reports
 GET    /api/v1/reports/:id
+GET    /api/v1/reports/:id/download?format=pdf
+GET    /api/v1/reports/:id/download?format=xml
 PATCH  /api/v1/reports/:id
 DELETE /api/v1/reports/:id
 ```
@@ -593,13 +626,44 @@ Example:
 
 ```json
 {
-  "historyId": 12,
+  "interactionCheckId": 12,
+  "preferredFormat": "pdf",
   "title": "Medication Safety Report",
   "notes": "Review with pharmacist before combining."
 }
 ```
 
-PDF generation is not included yet. Reports are stored in MySQL and can be viewed from the frontend.
+PDF generation is handled by the backend with `pdfkit`. XML export is available from the download endpoint. Report metadata is stored in MySQL, and downloads are ownership-protected.
+
+## Knowledge Base Imports
+
+Use the backend import pipeline for future verified datasets:
+
+```bash
+cd backend
+npm run import:kb -- --file=./data/your-approved-ddi-dataset.csv --dataset="DDInter 2.0" --source="https://ddinter2.scbdd.com/" --license="Verify dataset terms before redistribution" --version="2024-05-14"
+```
+
+Supported file types:
+
+- CSV
+- JSON
+- Excel `.xlsx`
+
+The importer normalizes medications, aliases, pair ordering, severity, evidence source, and dataset metadata. Failed rows are logged under `backend/storage/imports`.
+
+To test the importer without a real dataset:
+
+```bash
+cd backend
+npm run import:kb -- --file=./data/ddi-import-template.csv --dataset="Local Template" --source="Local template" --license="Internal test" --dry-run
+```
+
+Dataset research and licensing notes:
+
+```text
+backend/docs/knowledge-base-datasets.md
+```
 
 ## Admin APIs
 
@@ -639,6 +703,8 @@ Admins can create and manage verified interaction rows.
 - `effect`
 - `recommendation`
 - `source`
+- `evidenceSource`
+- `sourceDataset`
 - `createdAt`
 - `updatedAt`
 
@@ -656,12 +722,20 @@ Admins can create and manage verified interaction rows.
 - `id`
 - `userId`
 - `title`
+- `reportReference`
+- `format`
 - `selectedDrugs`
 - `interactionResults`
+- `checkedPairs`
+- `overallStatus`
 - `severitySummary`
 - `status`
 - `notes`
-- `pdfUrl`
+- `fileName`
+- `filePath`
+- `storageUrl`
+- `mimeType`
+- `generatedAt`
 - `createdAt`
 - `updatedAt`
 
@@ -671,6 +745,30 @@ Admins can create and manage verified interaction rows.
 - `rxcui`
 - `genericName`
 - `aliases`
+- `category`
+- `createdAt`
+- `updatedAt`
+
+### MedicationAlias
+
+- `id`
+- `medicationId`
+- `alias`
+- `normalizedAlias`
+- `country`
+- `source`
+- `createdAt`
+- `updatedAt`
+
+### KnowledgeBaseDataset
+
+- `id`
+- `name`
+- `source`
+- `license`
+- `version`
+- `recordCount`
+- `importedAt`
 - `createdAt`
 - `updatedAt`
 

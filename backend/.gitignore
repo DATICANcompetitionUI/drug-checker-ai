@@ -25,6 +25,7 @@ Thumbs.db
 
 # Miscellaneous
 coverage/
+storage/
 
 package-lock.json
 text.txt

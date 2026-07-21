@@ -12,11 +12,13 @@ export interface DrugInteractionAttributes {
   effect: string;
   recommendation: string;
   source: string;
+  evidenceSource: string | null;
+  sourceDataset: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
-export interface DrugInteractionCreationAttributes extends Optional<DrugInteractionAttributes, "id" | "createdAt" | "updatedAt"> {}
+export interface DrugInteractionCreationAttributes extends Optional<DrugInteractionAttributes, "id" | "evidenceSource" | "sourceDataset" | "createdAt" | "updatedAt"> {}
 
 export class DrugInteraction extends Model<DrugInteractionAttributes, DrugInteractionCreationAttributes> implements DrugInteractionAttributes {
   declare id: number;
@@ -28,6 +30,8 @@ export class DrugInteraction extends Model<DrugInteractionAttributes, DrugIntera
   declare effect: string;
   declare recommendation: string;
   declare source: string;
+  declare evidenceSource: string | null;
+  declare sourceDataset: string | null;
   declare createdAt: Date;
   declare updatedAt: Date;
 }
@@ -69,6 +73,16 @@ export const DrugInteractionSchema = {
   source: {
     type: DataTypes.STRING,
     allowNull: false,
+  },
+  evidenceSource: {
+    type: DataTypes.STRING(512),
+    allowNull: true,
+    defaultValue: null,
+  },
+  sourceDataset: {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+    defaultValue: null,
   },
   createdAt: {
     type: DataTypes.DATE,

@@ -6,12 +6,13 @@ export interface MedicationAttributes {
   rxcui: string;
   genericName: string;
   aliases: string[];
+  category: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
 export interface MedicationCreationAttributes
-  extends Optional<MedicationAttributes, "id" | "createdAt" | "updatedAt"> {}
+  extends Optional<MedicationAttributes, "id" | "category" | "createdAt" | "updatedAt"> {}
 
 export class Medication
   extends Model<MedicationAttributes, MedicationCreationAttributes>
@@ -21,6 +22,7 @@ export class Medication
   declare rxcui: string;
   declare genericName: string;
   declare aliases: string[];
+  declare category: string | null;
   declare createdAt: Date;
   declare updatedAt: Date;
 }
@@ -44,6 +46,11 @@ export const MedicationSchema = {
     type: DataTypes.JSON,
     allowNull: false,
     defaultValue: [],
+  },
+  category: {
+    type: DataTypes.STRING(120),
+    allowNull: true,
+    defaultValue: null,
   },
   createdAt: {
     type: DataTypes.DATE,

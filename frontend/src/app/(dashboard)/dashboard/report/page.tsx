@@ -8,7 +8,6 @@ import {
   Download,
   FileText,
   Loader2,
-  Printer,
   Search,
   Trash2,
   X,
@@ -57,6 +56,7 @@ function ReportContent() {
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [isDeletingReport, setIsDeletingReport] = useState(false);
+  const [downloading, setDownloading] = useState<string | null>(null);
 
   const openModal = useCallback((id: number) => {
     setSelectedId(id);
@@ -128,11 +128,32 @@ function ReportContent() {
     }
   }
 
+  async function downloadReport(reportId: number, format: "pdf" | "xml") {
+    const key = `${reportId}-${format}`;
+    setDownloading(key);
+    try {
+      const { blob, fileName } = await api.reports.download(reportId, format);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      toast.success(format === "pdf" ? "PDF report downloaded." : "XML export downloaded.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Unable to download report.");
+    } finally {
+      setDownloading(null);
+    }
+  }
+
   return (
     <div>
       <DashboardHeader
         title="Clinical reports"
-        description="Search, view, print, and delete reports generated from saved interaction history."
+        description="Search, view, download, export, and delete backend-generated clinical reports."
       />
 
       <Card padding="lg">
@@ -174,10 +195,11 @@ function ReportContent() {
                 <Card key={item.id} className="p-6">
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <Badge variant={variant(severity)}>{severity || "CLEAR"}</Badge>
+                      <Badge variant={variant(severity)}>{item.overallStatus === "NO_KNOWN_INTERACTION" ? "NO KNOWN" : severity || "FOUND"}</Badge>
                       <h3 className="mt-3 text-lg font-black">{item.title}</h3>
+                      <p className="mt-1 text-xs font-black uppercase tracking-wide text-primary-blue">{item.reportReference}</p>
                       <p className="mt-2 flex items-center gap-1 text-xs font-bold text-text-muted">
-                        <Calendar className="h-4 w-4" /> {formatDate(item.createdAt)}
+                        <Calendar className="h-4 w-4" /> {formatDate(item.generatedAt || item.createdAt)}
                       </p>
                     </div>
                     <FileText className="h-7 w-7 text-primary-blue shrink-0" />
@@ -190,13 +212,23 @@ function ReportContent() {
                     ))}
                   </div>
                   <div className="mt-5 flex items-center justify-between border-t border-border-app pt-4">
-                    <span className="text-xs font-bold text-text-muted">{item.interactionCount} verified findings</span>
+                    <span className="text-xs font-bold text-text-muted">
+                      {item.interactionCount} finding{item.interactionCount === 1 ? "" : "s"} - {severity || "No severity"}
+                    </span>
                     <div className="flex gap-2">
+                      <Button variant="secondary" onClick={() => downloadReport(item.id, "pdf")} disabled={downloading === `${item.id}-pdf`} className="px-3 py-2">
+                        {downloading === `${item.id}-pdf` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                        <span className="hidden xl:inline">PDF</span>
+                      </Button>
+                      <Button variant="secondary" onClick={() => downloadReport(item.id, "xml")} disabled={downloading === `${item.id}-xml`} className="px-3 py-2">
+                        {downloading === `${item.id}-xml` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                        <span className="hidden xl:inline">XML</span>
+                      </Button>
                       <Button variant="secondary" onClick={() => setConfirmDeleteId(item.id)} className="px-3 py-2">
                         <Trash2 className="h-4 w-4" />
                       </Button>
                       <Button onClick={() => openModal(item.id)} className="px-4 py-2">
-                        View
+                        View details
                       </Button>
                     </div>
                   </div>
@@ -221,19 +253,23 @@ function ReportContent() {
       {selectedId && (
         <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-slate-900/40 backdrop-blur-sm sm:items-start sm:p-4">
           <div className="w-full max-w-2xl rounded-t-[34px] border border-border-app bg-white shadow-premium sm:my-8 sm:rounded-[34px]">
-            <div className="flex items-center justify-between border-b border-border-app px-7 py-5 print:hidden">
+            <div className="flex items-center justify-between border-b border-border-app px-7 py-5">
               <h3 className="text-xl font-black">Clinical report</h3>
               <div className="flex items-center gap-2">
-                <Button variant="secondary" onClick={() => window.print()} className="px-3 py-2">
-                  <Printer className="h-4 w-4" />
-                </Button>
-                <Button variant="secondary" onClick={() => window.print()} className="px-3 py-2">
-                  <Download className="h-4 w-4" />
-                </Button>
                 {detail && (
-                  <Button variant="danger" onClick={() => setConfirmDeleteId(detail.id)} className="px-3 py-2">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <>
+                    <Button variant="secondary" onClick={() => downloadReport(detail.id, "pdf")} disabled={downloading === `${detail.id}-pdf`} className="px-3 py-2">
+                      {downloading === `${detail.id}-pdf` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                      <span className="hidden sm:inline">PDF</span>
+                    </Button>
+                    <Button variant="secondary" onClick={() => downloadReport(detail.id, "xml")} disabled={downloading === `${detail.id}-xml`} className="px-3 py-2">
+                      {downloading === `${detail.id}-xml` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                      <span className="hidden sm:inline">XML</span>
+                    </Button>
+                    <Button variant="danger" onClick={() => setConfirmDeleteId(detail.id)} className="px-3 py-2">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </>
                 )}
                 <button
                   onClick={closeModal}
@@ -255,10 +291,11 @@ function ReportContent() {
                   <div>
                     <p className="text-sm font-black uppercase tracking-[0.18em] text-primary-blue">Clinical report</p>
                     <h1 className="mt-2 text-3xl font-black tracking-tight">{detail.title}</h1>
-                    <p className="mt-2 text-sm font-medium text-text-muted">Generated {formatDate(detail.createdAt)}</p>
+                    <p className="mt-2 text-xs font-black uppercase tracking-wide text-primary-blue">{detail.reportReference}</p>
+                    <p className="mt-2 text-sm font-medium text-text-muted">Generated {formatDate(detail.generatedAt || detail.createdAt)}</p>
                   </div>
                   <Badge variant={variant(highest(detail.severitySummary))}>
-                    {highest(detail.severitySummary) || "CLEAR"}
+                    {detail.overallStatus === "NO_KNOWN_INTERACTION" ? "NO KNOWN" : highest(detail.severitySummary) || "FOUND"}
                   </Badge>
                 </div>
 
@@ -313,7 +350,11 @@ function ReportContent() {
                   ) : (
                     <div className="rounded-[28px] border border-dashed border-border-app bg-surface-app p-8 text-center">
                       <MedicalIllustration name="safe" className="mx-auto h-32 w-44" />
-                      <p className="mt-2 text-sm font-black">No verified interactions in this report.</p>
+                      <p className="mt-2 text-sm font-black">No known interaction found</p>
+                      <p className="mx-auto mt-2 max-w-md text-sm font-medium leading-6 text-text-secondary">
+                        No known interaction was found between the selected medications in our current verified dataset.
+                      </p>
+                      <p className="mx-auto mt-3 max-w-md text-xs font-semibold leading-5 text-text-muted">{detail.safetyNote}</p>
                     </div>
                   )}
                 </div>

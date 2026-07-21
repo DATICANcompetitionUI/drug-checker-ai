@@ -20,9 +20,29 @@ export interface Drug {
   aliases?: string[];
   synonym?: string;
   tty?: string;
+  category?: string | null;
+}
+
+export interface KnowledgeBaseStats {
+  version: string;
+  totalMedications: number;
+  totalAliases: number;
+  totalInteractionRecords: number;
+  lastUpdated: string | null;
+  sourceDatasets: Array<{
+    name: string;
+    source: string;
+    license: string;
+    version: string | null;
+    recordCount: number;
+    importedAt: string;
+  }>;
 }
 
 export type Severity = "LOW" | "MODERATE" | "HIGH";
+export type InteractionStatus =
+  | "INTERACTION_FOUND"
+  | "NO_KNOWN_INTERACTION";
 
 export interface SeveritySummary {
   LOW: number;
@@ -52,6 +72,14 @@ export interface Interaction {
   isAiGenerated?: boolean;
 }
 
+export interface CheckedPair {
+  drugA: Drug;
+  drugB: Drug;
+  status: InteractionStatus;
+  severity: Severity | null;
+  source: string | null;
+}
+
 export interface DuplicateTherapy {
   ingredient: Drug;
   drugs: Drug[];
@@ -62,6 +90,24 @@ export interface DuplicateTherapy {
 }
 
 export interface InteractionCheckResult {
+  hasInteraction: boolean;
+  status: InteractionStatus;
+  title: string;
+  message: string;
+  safetyNote: string;
+  checkedDrugs: Drug[];
+  checkedPairs: CheckedPair[];
+  sourceCoverage: {
+    dataset: string;
+    checkedAt: string;
+  };
+  metadata?: {
+    processingTimeMs: number;
+    knowledgeBaseVersion: string;
+    interactionRecordsChecked: number;
+    knowledgeBaseLastUpdated: string | null;
+  };
+  checkedAt: string;
   selectedDrugs: Drug[];
   duplicateTherapies: DuplicateTherapy[];
   safetySummary: SafetySummary;
@@ -93,29 +139,47 @@ export interface HistoryDetail {
 }
 
 export type ReportStatus = "GENERATED" | "REVIEWED" | "ARCHIVED";
+export type ReportFormat = "pdf" | "xml";
 
 export interface ReportListItem {
   id: number;
+  reportReference: string;
   title: string;
+  format: ReportFormat;
   status: ReportStatus;
   notes: string | null;
   selectedDrugs: Drug[];
+  checkedPairs: CheckedPair[];
+  overallStatus: InteractionStatus;
   severitySummary: SeveritySummary;
+  severity: Severity | null;
   interactionCount: number;
-  pdfUrl: string | null;
+  generatedAt: string;
+  downloadUrl?: string;
+  xmlDownloadUrl?: string;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface ReportDetail {
   id: number;
+  reportReference: string;
   title: string;
+  format: ReportFormat;
   status: ReportStatus;
   notes: string | null;
   selectedDrugs: Drug[];
+  checkedPairs: CheckedPair[];
+  overallStatus: InteractionStatus;
   severitySummary: SeveritySummary;
+  severity: Severity | null;
   interactions: Interaction[];
-  pdfUrl: string | null;
+  generatedAt: string;
+  downloadUrl?: string;
+  xmlDownloadUrl?: string;
+  disclaimer: string;
+  safetyNote: string;
+  source: string;
   createdAt: string;
   updatedAt: string;
 }

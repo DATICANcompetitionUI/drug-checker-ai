@@ -5,6 +5,10 @@ export interface SelectedDrug {
   name: string;
 }
 
+export type InteractionStatus =
+  | "INTERACTION_FOUND"
+  | "NO_KNOWN_INTERACTION";
+
 export interface InteractionCheckRequest {
   drugs: SelectedDrug[];
 }
@@ -45,6 +49,26 @@ export interface SafetySummary {
   };
   highestSeverity: "LOW" | "MODERATE" | "HIGH" | null;
   actionMessage: string;
+}
+
+export interface CheckedPair {
+  drugA: SelectedDrug;
+  drugB: SelectedDrug;
+  status: InteractionStatus;
+  severity: "LOW" | "MODERATE" | "HIGH" | null;
+  source: string | null;
+}
+
+export interface SourceCoverage {
+  dataset: string;
+  checkedAt: string;
+}
+
+export interface InteractionCheckMetadata {
+  processingTimeMs: number;
+  knowledgeBaseVersion: string;
+  interactionRecordsChecked: number;
+  knowledgeBaseLastUpdated: string | null;
 }
 
 export type InteractionResponse = BaseResponse;

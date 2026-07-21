@@ -27,7 +27,7 @@ Important safety rules in this codebase:
 - Gemini must not invent drug interaction data.
 - Verified interactions come from the local `drug_interactions` table.
 - AI summaries and explanations are generated only after verified data is found.
-- If no verified local interaction is found, the app should not claim that a combination is safe.
+- If no known interaction is found in the verified dataset, the app should return `NO_KNOWN_INTERACTION` and must not claim that a combination is safe.
 - Users should confirm medication decisions with a clinician or pharmacist.
 
 ## Tech Stack
@@ -132,7 +132,9 @@ GOOGLE_CLOUD_VISION_API_KEY=
 USE_GEMINI_PAIR_EXPLANATIONS=false
 RXNAV_BASE_URL=https://rxnav.nlm.nih.gov/REST
 AUTO_SEED_INTERACTIONS=true
+AUTO_SEED_MEDICATIONS=true
 ADMIN_EMAILS=admin@example.com
+REPORT_STORAGE_DIR=storage/reports
 ```
 
 ## Base URLs
@@ -317,6 +319,21 @@ Uses RxNav:
 https://rxnav.nlm.nih.gov/REST/rxcui/{rxcui}/properties.json
 ```
 
+### Knowledge Base Stats
+
+```http
+GET /api/drugs/knowledge-base/stats
+```
+
+Returns knowledge-base transparency metadata:
+
+- `version`
+- `totalMedications`
+- `totalAliases`
+- `totalInteractionRecords`
+- `lastUpdated`
+- `sourceDatasets`
+
 ## Interactions
 
 ### Check Interactions
@@ -349,6 +366,15 @@ Request rules:
 
 The service generates all possible drug pairs, checks the local `drug_interactions` table in both directions, and returns:
 
+- `hasInteraction`
+- `status`: `INTERACTION_FOUND` or `NO_KNOWN_INTERACTION`
+- `title`
+- `message`
+- `safetyNote`
+- `checkedDrugs`
+- `checkedPairs`
+- `sourceCoverage`
+- `checkedAt`
 - `duplicateTherapies`
 - `safetySummary`
 - `aiSummary`
@@ -499,7 +525,7 @@ Authorization: Bearer <accessToken>
 
 ## Reports
 
-All report routes are protected. Reports are stored in MySQL. PDF generation is not included yet.
+All report routes are protected. Reports are stored in MySQL and generated/downloaded by the backend. PDF is the default user-facing format; XML is available as a structured export.
 
 ### Generate Report
 
@@ -510,7 +536,8 @@ Authorization: Bearer <accessToken>
 
 ```json
 {
-  "historyId": 12,
+  "interactionCheckId": 12,
+  "preferredFormat": "pdf",
   "title": "Jane's Interaction Report",
   "notes": "Patient asked for pharmacist review before taking these together."
 }
@@ -522,15 +549,64 @@ Preferred flow:
 2. Use the returned `historyId`.
 3. Generate the report from that history id.
 
-The report service loads the user's own interaction history, copies the selected drugs and verified interactions, then stores a `severitySummary`.
+The report service loads the user's own interaction history, copies selected drugs, checked pairs, verified interactions, overall status, and severity summary, then writes a professional PDF under `REPORT_STORAGE_DIR`.
 
-Direct report generation with `selectedDrugs` and `interactionResults` is still supported for testing, but `historyId` is the cleaner app flow.
+Direct report generation with `selectedDrugs` and `interactionResults` is still supported for testing, but `interactionCheckId` or `historyId` is the cleaner app flow.
 
 New report fields:
 
 - `status`: `GENERATED`, `REVIEWED`, or `ARCHIVED`
 - `notes`: optional user notes
-- `pdfUrl`: nullable placeholder for future PDF generation
+- `reportReference`: unique human-readable reference
+- `format`: `pdf` or `xml`
+- `overallStatus`: `INTERACTION_FOUND` or `NO_KNOWN_INTERACTION`
+- `fileName`, `filePath`, `mimeType`: server-side file metadata. `filePath` is never exposed to clients.
+- `generatedAt`: report generation timestamp
+
+### Download Report
+
+```http
+GET /api/reports/:id/download?format=pdf
+GET /api/reports/:id/download?format=xml
+Authorization: Bearer <accessToken>
+```
+
+Downloads use `Content-Disposition: attachment` with `application/pdf` or `application/xml`. Users can only download their own reports.
+
+## Knowledge Base Imports
+
+Drug Checker AI includes a reusable import pipeline for CSV, JSON, and Excel files:
+
+First place an approved dataset file under `backend/data/`. The example file name below is a placeholder; DDInter/Kaggle files are not bundled because their dataset terms must be verified before redistribution.
+
+```bash
+npm run import:kb -- --file=./data/your-approved-ddi-dataset.csv --dataset="DDInter 2.0" --source="https://ddinter2.scbdd.com/" --license="Verify dataset terms before redistribution" --version="2024-05-14"
+```
+
+Dry run:
+
+```bash
+npm run import:kb -- --file=./data/ddi-import-template.csv --dataset="Local Template" --source="Local template" --license="Internal test" --dry-run
+```
+
+Flexible interaction columns:
+
+- `drugAName`, `drugBName`
+- `drugARxcui`, `drugBRxcui`
+- `severity`
+- `effect` or `description`
+- `recommendation` or `management`
+- `evidenceSource`
+
+The importer creates medications, merges aliases, normalizes pair order, skips duplicate interactions, stores source metadata, and logs failed rows under `storage/imports`.
+
+Dataset research and licensing notes are in:
+
+```text
+docs/knowledge-base-datasets.md
+```
+
+## Report Management
 
 ### List Reports
 
@@ -628,6 +704,41 @@ DELETE /api/admin/interactions/:id
 - `effect`
 - `recommendation`
 - `source`
+- `evidenceSource`
+- `sourceDataset`
+- `createdAt`
+- `updatedAt`
+
+### Medication
+
+- `id`
+- `rxcui`
+- `genericName`
+- `aliases`
+- `category`
+- `createdAt`
+- `updatedAt`
+
+### MedicationAlias
+
+- `id`
+- `medicationId`
+- `alias`
+- `normalizedAlias`
+- `country`
+- `source`
+- `createdAt`
+- `updatedAt`
+
+### KnowledgeBaseDataset
+
+- `id`
+- `name`
+- `source`
+- `license`
+- `version`
+- `recordCount`
+- `importedAt`
 - `createdAt`
 - `updatedAt`
 
@@ -645,12 +756,20 @@ DELETE /api/admin/interactions/:id
 - `id`
 - `userId`
 - `title`
+- `reportReference`
+- `format`
 - `selectedDrugs`
 - `interactionResults`
+- `checkedPairs`
+- `overallStatus`
 - `severitySummary`
 - `status`
 - `notes`
-- `pdfUrl`
+- `fileName`
+- `filePath`
+- `storageUrl`
+- `mimeType`
+- `generatedAt`
 - `createdAt`
 - `updatedAt`
 

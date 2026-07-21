@@ -378,7 +378,7 @@ EXPLANATION: [2-3 sentences explaining the mechanism, clinical relevance, and wh
 
 Severity definitions:
 NONE = no known clinically significant interaction
-LOW = minor interaction, generally safe with routine monitoring
+LOW = minor interaction that may require routine monitoring
 MODERATE = clinically relevant, may require dose adjustment or closer monitoring
 HIGH = significant risk, avoid concurrent use or requires specialist management`;
 
@@ -416,31 +416,6 @@ function parseAssessmentResponse(raw: string): AiAssessment | null {
   if (!effect || !recommendation) return null;
   return { severity, effect, recommendation, explanation };
 }
-
-export const assessUnverifiedInteraction = async (
-  drugA: SelectedDrug,
-  drugB: SelectedDrug
-): Promise<AiAssessment | null> => {
-  if (!process.env.GEMINI_API_KEY) return null;
-
-  try {
-    const response = await axios.post(
-      getGeminiEndpoint(),
-      {
-        systemInstruction: {
-          parts: [{ text: "You are a clinical pharmacologist providing accurate pharmacological interaction assessments based on established medical literature." }],
-        },
-        contents: [{ parts: [{ text: AI_ASSESS_PROMPT(drugA, drugB) }] }],
-        generationConfig: { temperature: 0.1, topP: 0.75, maxOutputTokens: 400 },
-      },
-      { params: { key: process.env.GEMINI_API_KEY } }
-    );
-
-    return parseAssessmentResponse(extractGeminiText(response.data));
-  } catch {
-    return null;
-  }
-};
 
 // ── Interaction pair explanation ──────────────────────────────────────────────
 
@@ -610,7 +585,7 @@ const buildFallbackSummary = (
         "- Follow the specific recommendations listed for each verified interaction.",
       ]
     : [
-        "- No verified local interactions were found, but this does not mean no interactions exist.",
+        "- No known interaction was found between the selected medications in the current verified dataset.",
         "- Always consult a qualified healthcare professional or pharmacist before combining medications.",
       ];
 

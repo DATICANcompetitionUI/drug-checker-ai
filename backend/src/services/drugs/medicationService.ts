@@ -3,6 +3,7 @@ import { BAD_REQUEST, INTERNAL_SERVER_ERROR, SUCCESS } from "../../constants/sta
 import { messageHandler } from "../../utils/index.js";
 import { DrugResponse } from "../../types/drugs/drug.js";
 import Medication from "../../schemas/medications/medicationSchema.js";
+import MedicationAlias from "../../schemas/medications/medicationAliasSchema.js";
 import { medicationSeedData } from "../../database/seeders/medicationSeedData.js";
 
 interface MedicationResult {
@@ -10,9 +11,10 @@ interface MedicationResult {
   rxcui: string;
   name: string;
   aliases: string[];
+  category?: string | null;
 }
 
-type MedRecord = { id: number; rxcui: string; genericName: string; aliases: string[] };
+type MedRecord = { id: number; rxcui: string; genericName: string; aliases: string[]; category?: string | null };
 
 const LOCAL_MEDICATION_PATCHES: Array<Omit<MedRecord, "id">> = [
   { rxcui: "18343", genericName: "Artemether", aliases: ["Coartem", "Lonart", "Amatem", "Lokmal", "Artefan", "Lumartem", "Artemether Lumefantrine"] },
@@ -259,8 +261,22 @@ async function loadCache(): Promise<MedRecord[]> {
   if (cache) return cache;
   try {
     const rows = await Medication.findAll({ order: [["genericName", "ASC"]] });
+    const aliases = await MedicationAlias.findAll();
+    const aliasesByMedication = new Map<number, string[]>();
+    aliases.forEach((alias) => {
+      aliasesByMedication.set(alias.medicationId, [
+        ...(aliasesByMedication.get(alias.medicationId) || []),
+        alias.alias,
+      ]);
+    });
     cache = applyLocalMedicationPatches(
-      rows.map((m) => ({ id: m.id, rxcui: m.rxcui, genericName: m.genericName, aliases: m.aliases }))
+      rows.map((m) => ({
+        id: m.id,
+        rxcui: m.rxcui,
+        genericName: m.genericName,
+        aliases: uniqueAliases([...(m.aliases || []), ...(aliasesByMedication.get(m.id) || [])]),
+        category: m.category,
+      }))
     );
   } catch {
     // DB unreachable — serve from bundled seed data so searches never fail
@@ -297,6 +313,7 @@ function toResult(med: MedRecord): MedicationResult {
     rxcui: med.rxcui,
     name: med.genericName,
     aliases: med.aliases,
+    category: med.category || null,
   };
 }
 

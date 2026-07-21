@@ -7,6 +7,7 @@ import {
   Brain,
   Calendar,
   ChevronRight,
+  Download,
   FileText,
   Loader2,
   Pill,
@@ -116,15 +117,33 @@ export default function HistoryPage() {
 
   async function handleGenerateReport(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    await generateReport("pdf");
+  }
+
+  async function downloadReportFile(reportId: number, format: "pdf" | "xml") {
+    const { blob, fileName } = await api.reports.download(reportId, format);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  async function generateReport(preferredFormat: "pdf" | "xml") {
     if (!reportItem) return;
     setIsGeneratingReport(true);
     try {
-      await api.reports.generate({
+      const response = await api.reports.generate({
         historyId: reportItem.id,
         title: reportTitle || "Drug Interaction Report",
         notes: reportNotes || undefined,
+        preferredFormat,
       });
-      toast.success("Clinical report generated. View it in Clinical reports.");
+      await downloadReportFile(response.data.id, preferredFormat);
+      toast.success(preferredFormat === "pdf" ? "PDF report downloaded. View it in Clinical reports." : "XML export downloaded. View it in Clinical reports.");
       setReportItem(null);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Unable to generate report.");
@@ -211,7 +230,7 @@ export default function HistoryPage() {
                       className="px-4 py-2.5"
                     >
                       <FileText className="h-4 w-4" />
-                      <span className="hidden sm:inline">Report</span>
+                      <span className="hidden sm:inline">PDF Report</span>
                     </Button>
                     <Button
                       variant="danger"
@@ -416,7 +435,11 @@ export default function HistoryPage() {
               </Button>
               <Button type="submit" disabled={isGeneratingReport}>
                 {isGeneratingReport ? <Loader2 className="h-4 w-4 animate-spin" /> : <ChevronRight className="h-4 w-4" />}
-                Save report
+                {isGeneratingReport ? "Preparing your clinical report..." : "Generate PDF Report"}
+              </Button>
+              <Button type="button" variant="secondary" disabled={isGeneratingReport} onClick={() => generateReport("xml")}>
+                {isGeneratingReport ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                Export XML
               </Button>
             </div>
           </form>

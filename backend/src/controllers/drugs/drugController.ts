@@ -3,6 +3,7 @@ import { getDrugDetailsService } from "../../services/drugs/rxnavService.js";
 import { searchMedicationsService } from "../../services/drugs/medicationService.js";
 import { identifyMedicationFromImage } from "../../services/ai/geminiService.js";
 import { lookupBarcodeService } from "../../services/drugs/barcodeService.js";
+import { getKnowledgeBaseStatsService } from "../../services/knowledgeBase/knowledgeBaseService.js";
 import { BAD_REQUEST, INTERNAL_SERVER_ERROR, SUCCESS } from "../../constants/statusCode.js";
 import { messageHandler } from "../../utils/index.js";
 
@@ -12,6 +13,12 @@ export const searchDrugsController = async (req: Request, res: Response) => {
   const limit = Math.min(50, Math.max(1, parseInt(String(req.query.limit || "20"), 10)));
 
   await searchMedicationsService(query, page, limit, (result) => {
+    return res.status(result.statusCode).json(result);
+  });
+};
+
+export const knowledgeBaseStatsController = async (_req: Request, res: Response) => {
+  await getKnowledgeBaseStatsService((result) => {
     return res.status(result.statusCode).json(result);
   });
 };

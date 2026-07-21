@@ -4,6 +4,7 @@ import {
   HistoryDetail,
   HistoryListItem,
   InteractionCheckResult,
+  KnowledgeBaseStats,
   ReportDetail,
   ReportListItem,
   ReportStatus,
@@ -55,6 +56,39 @@ async function apiRequest<T>(path: string, options: RequestOptions = {}): Promis
   return json;
 }
 
+async function downloadRequest(path: string, retryOnUnauthorized = true): Promise<{ blob: Blob; fileName: string }> {
+  const response = await fetch(`${apiBase}${path}`, {
+    method: "GET",
+    credentials: "include",
+  });
+
+  if (response.status === 401 && retryOnUnauthorized) {
+    const refreshed = await fetch(`${apiBase}/users/refresh-token`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+    });
+
+    if (refreshed.ok) {
+      return downloadRequest(path, false);
+    }
+  }
+
+  if (!response.ok) {
+    const json = await response.json().catch(() => null);
+    throw new Error(json?.message || "Unable to download report.");
+  }
+
+  const disposition = response.headers.get("Content-Disposition") || "";
+  const match = disposition.match(/filename="?([^"]+)"?/i);
+  const fileName = match?.[1] || "drug-checker-ai-report";
+
+  return {
+    blob: await response.blob(),
+    fileName,
+  };
+}
+
 export const api = {
   auth: {
     register: (payload: { name: string; email: string; password: string }) =>
@@ -73,6 +107,7 @@ export const api = {
       apiRequest<{ medicationName: string; genericName: string; scanSource?: string; ocrText?: string; ocrError?: string }>("/drugs/scan", { method: "POST", body: payload }),
     barcode: (payload: { barcodeValue: string; format?: string }) =>
       apiRequest<{ medicationName: string | null; genericName: string | null; rxcui: string | null; source: string }>("/drugs/barcode", { method: "POST", body: payload }),
+    knowledgeBaseStats: () => apiRequest<KnowledgeBaseStats>("/drugs/knowledge-base/stats", { method: "GET" }),
   },
   interactions: {
     check: (drugs: Drug[]) =>
@@ -91,8 +126,10 @@ export const api = {
   reports: {
     list: () => apiRequest<ReportListItem[]>("/reports", { method: "GET" }),
     detail: (id: number) => apiRequest<ReportDetail>(`/reports/${id}`, { method: "GET" }),
-    generate: (payload: { historyId?: number; title?: string; notes?: string; selectedDrugs?: Drug[]; interactionResults?: unknown[] }) =>
+    generate: (payload: { historyId?: number; interactionCheckId?: number | string; title?: string; notes?: string; selectedDrugs?: Drug[]; interactionResults?: unknown[]; preferredFormat?: "pdf" | "xml" }) =>
       apiRequest<ReportDetail>("/reports/generate", { method: "POST", body: payload }),
+    download: (id: number, format: "pdf" | "xml" = "pdf") =>
+      downloadRequest(`/reports/${id}/download?format=${format}`),
     update: (id: number, payload: { title?: string; notes?: string | null; status?: ReportStatus }) =>
       apiRequest<ReportDetail>(`/reports/${id}`, { method: "PATCH", body: payload }),
     remove: (id: number) => apiRequest<Record<string, never>>(`/reports/${id}`, { method: "DELETE" }),

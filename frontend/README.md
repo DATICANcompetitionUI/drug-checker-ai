@@ -16,7 +16,9 @@ This project was built for a hackathon demo. It is designed to be honest about s
 - Barcode scanner using the browser `BarcodeDetector` API where supported
 - Manual fallback search when camera or barcode scanning is not accurate
 - Interaction history timeline
-- Clinical report generation from saved history
+- Backend-generated PDF clinical reports from saved history
+- Optional XML report export
+- Knowledge-base coverage statistics on the dashboard
 - Profile page and account actions
 - Loading states, empty states, toast feedback, and responsive layouts
 
@@ -30,6 +32,7 @@ For the hackathon version:
 - Barcode lookup may fail because many local medication barcodes are not available in public drug databases.
 - The safest app flow is to type the generic active ingredient printed on the pack, for example `ibuprofen`, `paracetamol`, `artemisinin`, `piperaquine`, `amoxicillin`, or `metformin`.
 - AI is used only to explain interaction findings returned by the backend. It should not be treated as a source of new medical interaction data.
+- When the backend returns `NO_KNOWN_INTERACTION`, the UI shows `No known interaction found`, the checked medications, the checked time, and the safety note. It does not claim a combination is completely safe.
 
 Always confirm medication decisions with a qualified clinician or pharmacist.
 
@@ -126,6 +129,16 @@ credentials: "include"
 
 This is required because the backend stores `accessToken` and `refreshToken` in HTTP-only cookies.
 
+Create `.env` from the example when needed:
+
+```bash
+cp .env.example .env
+```
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:5000/api/v1
+```
+
 ## Demo Workflow
 
 1. Register or log in.
@@ -143,8 +156,10 @@ This is required because the backend stores `accessToken` and `refreshToken` in 
    - verified interactions
    - AI explanation
    - saved history status
+   - knowledge-base medication, alias, and interaction counts
 7. Open History to view saved checks.
-8. Generate a clinical report from a saved history item.
+8. Generate a PDF clinical report from a saved history item.
+9. Download PDF or export XML from the Clinical Reports page.
 
 Good high-risk demo combination:
 
